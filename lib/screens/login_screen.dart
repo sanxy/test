@@ -1,11 +1,17 @@
 
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:test/screens/dashboard_screen.dart';
 import 'package:test/screens/pre_load_screen.dart';
 import 'package:test/utils/next_screen.dart';
+import '../api/api_requests.dart';
+import '../api/api_response.dart';
+import '../api/api_response_type.dart';
 import '../utils/custom_widgets.dart';
 import '../utils/my_colors.dart';
+import '../utils/strings.dart';
+import '../utils/tools.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,24 +21,27 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  static const String validUsername = "user123";
-  static const String validPassword = "password123";
 
   final TextEditingController usernameController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   bool isPasswordObscured = true;
+  bool isLoading = false;
+  // username: 'emilys',
+  // password: 'emilyspass',
+
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: (){
+      onTap: () {
         FocusScope.of(context).unfocus();
       },
       child: Scaffold(
         backgroundColor: MyColors.white,
         body: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 30.0, vertical: 5.0),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 30.0, vertical: 5.0),
             child: Column(
               children: [
                 Expanded(
@@ -87,27 +96,16 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 30),
                         BuildBtn(
                           title: 'Log In',
+                          showLoadingIcon: isLoading,
                           onPressed: () {
                             // Validate username and password
-                            if (usernameController.text == validUsername &&
-                                passwordController.text == validPassword) {
-                              nextScreen(context, const DashboardScreen());
+                            if (usernameController.text.isNotEmpty &&
+                                passwordController.text.isNotEmpty) {
+                              loginMode(context);
                             } else {
                               // Show error dialog
-                              showDialog(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                  title: const Text('Error'),
-                                  content: const Text(
-                                      'Invalid username or password.'),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(context),
-                                      child: const Text('OK'),
-                                    ),
-                                  ],
-                                ),
-                              );
+                              dialog(context, 'Login Error',
+                                  'Username or password can\'t be empty');
                             }
                           },
                           buttonColor: MyColors.bluePrimary,
@@ -188,14 +186,17 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: MyColors.grey), // Border color for enabled state
+              borderSide: BorderSide(
+                  color: MyColors.grey), // Border color for enabled state
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: MyColors.bluePrimary, width: 2), // Border color for focused state
+              borderSide: BorderSide(color: MyColors.bluePrimary,
+                  width: 2), // Border color for focused state
             ),
             filled: true,
-            fillColor: Colors.grey.shade50, // Background color
+            fillColor: Colors.grey.shade50,
+            // Background color
             suffixIcon: suffixIcon,
           ),
         ),
@@ -203,6 +204,63 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-}
+  void loginMode(BuildContext context) {
+    if (mounted) {
+      setState(() {
+        isLoading = true;
+      });
+    }
+
+      postRequest(
+        route: 'https://dummyjson.com/auth/login',
+        isAuthorized: false,
+        payload: {
+          "username": usernameController.text.trim(),
+          "password": passwordController.text.trim(),
+          "expiresInMins": 60
+        },
+      ).then((ApiResponse response) async {
+        if (mounted) {
+          setState(() {
+            isLoading = false;
+          });
+        }
+        if (response.type == ApiResponseType.success) {
+          dPrint('login successful');
+          dynamic json = jsonDecode(response.response);
+
+          dPrint('login user::: ${json}');
+          nextScreen(context, const DashboardScreen());
+        } else if (response.type == ApiResponseType.failed) {
+          dynamic json = jsonDecode(response.response);
+          dialog(context, 'Login Error',
+              json['message'] ?? AppStrings.unknownError);
+        } else if (response.type == ApiResponseType.server) {
+          dialog(context, 'Network Error', AppStrings.internetError);
+        } else {
+          dialog(context, 'Login Error', AppStrings.unknownError);
+        }
+      });
+    }
+  }
+
+  void dialog(BuildContext context, String title, String message) {
+    showDialog(
+      context: context,
+      builder: (context) =>
+          AlertDialog(
+            title: Text(title),
+            content: Text(
+                message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+    );
+  }
+
 
 
